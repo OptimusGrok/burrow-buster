@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#07070f">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-fullscreen">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <title>Burrow Buster</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23d88020'/%3E%3Crect y='6' width='16' height='4' fill='%23000'/%3E%3Ccircle cx='8' cy='8' r='3' fill='%23e83828'/%3E%3C/svg%3E">
 <style>
@@ -20,11 +25,13 @@ canvas#game{position:fixed;left:0;top:0;image-rendering:pixelated;image-renderin
 #mini{position:fixed;display:flex;gap:6px;z-index:3}
 #mini div{width:44px;height:44px;opacity:.6;font-size:11px!important;border-radius:8px;background:rgba(40,60,140,.6);border:2px solid rgba(255,255,255,.4);box-sizing:border-box;display:flex;align-items:center;justify-content:center;font:bold 12px "Courier New",monospace;color:#fff;cursor:pointer}
 </style>
+<style>#bInstall{position:fixed;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:20;display:none;font:bold 13px monospace;color:#ffe040;background:rgba(20,20,40,.8);border:1px solid #ffe04080;border-radius:6px;padding:6px 10px;cursor:pointer}</style>
 </head>
 <body>
 <canvas id="game" width="480" height="600"></canvas>
 <div id="touch"><div id="stickBase"></div><div id="stickKnob"></div><div id="pump">PUMP</div></div>
 <div id="mini"><div id="bPause">II</div><div id="bMute">♪</div><div id="bFs">[ ]</div></div>
+<button id="bInstall" type="button">Install</button>
 <script>
 /* BURROW BUSTER — an original dig-and-pump arcade game. Single file, no assets. */
 'use strict';
@@ -102,7 +109,15 @@ miniBtn('bPause',()=>{In.pauseP=true;});miniBtn('bMute',()=>Audio.toggle());mini
 function updMute(){document.getElementById('bMute').textContent=Audio.muted?'OFF':'♪ ON';}updMute();
 function toggleFs(){const d=document,el=d.documentElement;try{if(d.fullscreenElement||d.webkitFullscreenElement)(d.exitFullscreen||d.webkitExitFullscreen).call(d);
  else{const r=el.requestFullscreen||el.webkitRequestFullscreen;if(r){const p=r.call(el,{navigationUI:'hide'});if(p&&p.catch)p.catch(()=>{});}}}catch(e){}}
-let fsTried=false;document.addEventListener('touchend',()=>{if(!fsTried){fsTried=true;if(!(document.fullscreenElement||document.webkitFullscreenElement))toggleFs();}});
+const isApp=()=>{try{return matchMedia('(display-mode: fullscreen)').matches||matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;}catch(e){return false;}};
+function appUi(){const b=document.getElementById('bFs');if(b)b.style.display=isApp()?'none':'';}appUi();
+try{matchMedia('(display-mode: fullscreen)').addEventListener('change',appUi);matchMedia('(display-mode: standalone)').addEventListener('change',appUi);}catch(e){}
+let instEv=null;const bInst=document.getElementById('bInstall');
+addEventListener('beforeinstallprompt',e=>{e.preventDefault();instEv=e;});
+addEventListener('appinstalled',()=>{instEv=null;});
+['touchstart','touchend','mousedown','click'].forEach(t=>bInst.addEventListener(t,e=>{e.stopPropagation();if(t==='click'&&instEv){const ev=instEv;instEv=null;bInst.style.display='none';ev.prompt();if(ev.userChoice)ev.userChoice.catch(()=>{});}},{passive:false}));
+setInterval(()=>{const show=!!instEv&&typeof G!=='undefined'&&G.mode==='title'&&!isApp();const v=show?'block':'none';if(bInst.style.display!==v)bInst.style.display=v;},250);
+if('serviceWorker' in navigator&&location.protocol!=='file:')addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
 document.addEventListener('fullscreenchange',resize);
 
 /* ---------- LAYOUT: adaptive full-window view, field never covered by controls ---------- */
