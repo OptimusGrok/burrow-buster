@@ -190,7 +190,7 @@ function addScore(n,x,y){G.score+=n;if(x!=null)G.fx.push({x,y,txt:String(n),t:0}
 function killPlayer(cause){if(G.god||G.mode!=='play')return;G.mode='dying';G.modeT=0;G.harp=null;G.deathCause=cause;Sfx.die();}
 function afterDeath(){G.lives--;if(G.lives<=0){G.mode='over';G.modeT=0;if(G.score>hiScore){hiScore=G.score;}localStorage.setItem(HI_KEY,hiScore);return;}
  const p=G.player;p.x=p.sx;p.y=p.sy;p.dir='r';
- for(const e of G.enemies)if(e.st!=='pop'&&e.st!=='crushed'){e.x=e.sx;e.y=e.sy;e.st='walk';e.inf=0;e.flame=0;e.flee=false;e.ghostCD=ghostCD();e.fireCD=ri(200,400);}
+ for(const e of G.enemies)if(e.st!=='pop'&&e.st!=='crushed'){e.x=e.sx;e.y=e.sy;e.st='walk';e.inDirt=false;e.inf=0;e.flame=0;e.flee=false;e.ghostCD=ghostCD();e.fireCD=ri(200,400);}
  G.mode='ready';G.modeT=0;}
 
 /* ---------- PLAYER + PUMP ---------- */
@@ -211,7 +211,7 @@ function updPlayer(pp){const p=G.player;p.moving=false;const w=wantDir();
 function harpTip(h){const p=G.player,[dx,dy]=DIRS[h.dir];return[p.x+T/2+dx*(T/2+h.len),p.y+T/2+dy*(T/2+h.len)];}
 function updHarp(pp,w){const h=G.harp;h.t++;
  if(h.st==='out'){h.len+=7;const[tx,ty]=harpTip(h);
-  for(const e of G.enemies){if(!['walk','inflate','charge','fire'].includes(e.st))continue;
+  for(const e of G.enemies){if(!(['walk','emerge','inflate','charge','fire'].includes(e.st)||(e.st==='ghost'&&!e.inDirt)))continue;
    if(Math.abs(e.x+T/2-tx)<T/2&&Math.abs(e.y+T/2-ty)<T/2){h.st='hold';h.tgt=e;h.t=0;e.inf=e.st==='inflate'?e.inf+1:1;e.st='inflate';e.flame=0;e.defT=0;Sfx.pump(e.inf);if(e.inf>=4){popEnemy(e,h.dir);G.harp=null;}return;}}
   const c=Math.floor(tx/T),r=Math.floor(ty/T);if(tx<0||tx>=FW||ty<T||ty>=ROWS*T||!G.dug[r][c]||h.len>=T*2.6)h.st='in';}
  else if(h.st==='in'){h.len-=14;if(h.len<=0)G.harp=null;}
@@ -229,7 +229,9 @@ function updEnemy(e){const p=G.player,spd=G.espd*(e.flee?1.3:1)*(e.type==='f'?0.
   e.ghostCD--;if(e.type==='f')e.fireCD--;
   if(aligned(e)){
    if(e.type==='f'&&e.fireCD<=0){if(Math.abs(p.y-e.y)<T||rand()<0.3){e.st='charge';e.fT=0;if(Math.abs(p.y-e.y)<T)e.face=p.x<e.x?'l':'r';Sfx.charge();break;}e.fireCD=60;}
-   if(e.ghostCD<=0&&e.y>T){e.st='ghost';e.gT=0;break;}
+   if(e.ghostCD<=0&&e.y>T){const c=e.x/T,r=e.y/T,dx=p.x-e.x,dy=p.y-e.y,ax=dx?(dx>0?'r':'l'):null,ay=dy?(dy>0?'d':'u'):null;
+    const tryD=(Math.abs(dx)>=Math.abs(dy)?[ax,ay]:[ay,ax]).filter(Boolean).find(d=>{const[ex,ey]=DIRS[d],c2=c+ex,r2=r+ey;return c2>=0&&c2<COLS&&r2>=2&&r2<ROWS&&!G.dug[r2][c2]&&!rockAt(c2,r2);});
+    if(tryD){e.st='ghost';e.gT=0;e.gdir=tryD;e.left=false;e.inDirt=false;break;}e.ghostCD=30;}
    const c=e.x/T,r=e.y/T,opts=['u','d','l','r'].filter(d=>canGo(c,r,d));
    if(!opts.length){e.ghostCD=Math.min(e.ghostCD,40);break;}
    let cand=opts.filter(d=>d!==REV[e.dir]);if(!cand.length)cand=opts;
@@ -237,14 +239,23 @@ function updEnemy(e){const p=G.player,spd=G.espd*(e.flee?1.3:1)*(e.type==='f'?0.
    else if(!cand.includes(e.dir)||rand()<0.3)e.dir=cand[Math.floor(rand()*cand.length)];}
   stepToward(e,e.dir,spd);if(e.dir==='l'||e.dir==='r')e.face=e.dir;break;}
  case 'ghost':{e.gT++;if(e.flee){fleeMove(e,spd);break;}
-  const dx=p.x-e.x,dy=p.y-e.y,m=Math.hypot(dx,dy)||1,gs=spd*0.7;e.x+=dx/m*gs;e.y+=dy/m*gs;e.x=Math.max(0,Math.min(FW-T,e.x));e.y=Math.max(T,Math.min(ROWS*T-T,e.y));if(dx)e.face=dx<0?'l':'r';
-  if(e.gT>80){const cc=Math.round(e.x/T),rr=Math.round(e.y/T);if(G.dug[rr][cc]&&rr>=1&&!rockAt(cc,rr)&&Math.abs(e.x-cc*T)<=gs+0.5&&Math.abs(e.y-rr*T)<=gs+0.5){e.x=cc*T;e.y=rr*T;e.st='walk';e.ghostCD=ghostCD();}}
+  const gs=spd*0.7;
+  if(!e.left){const[gx,gy]=DIRS[e.gdir];e.x+=gx*gs;e.y+=gy*gs;if(gx)e.face=gx<0?'l':'r';}
+  else{const dx=p.x-e.x,dy=p.y-e.y,m=Math.hypot(dx,dy)||1;e.x+=dx/m*gs;e.y+=dy/m*gs;if(dx)e.face=dx<0?'l':'r';}
+  e.x=Math.max(0,Math.min(FW-T,e.x));e.y=Math.max(T,Math.min(ROWS*T-T,e.y));
+  const cc=Math.floor((e.x+T/2)/T),rr=Math.floor((e.y+T/2)/T);e.inDirt=!G.dug[rr][cc];
+  if(e.inDirt)e.left=true;
+  else if(e.left&&!rockAt(cc,rr)){e.st='emerge';e.inDirt=false;e.tc=cc;e.tr=rr;}
+  else if(!e.left&&e.gT>60){e.st='emerge';e.tc=Math.round(e.x/T);e.tr=Math.round(e.y/T);}
   break;}
+ case 'emerge':{const tx=e.tc*T,ty=e.tr*T,dx=tx-e.x,dy=ty-e.y,m=Math.hypot(dx,dy);
+  if(m<=spd){e.x=tx;e.y=ty;e.st='walk';e.inDirt=false;e.ghostCD=Math.max(180,ghostCD());const opts=['u','d','l','r'].filter(d=>canGo(e.tc,e.tr,d));if(opts.length)e.dir=opts[Math.floor(rand()*opts.length)];}
+  else{e.x+=dx/m*spd;e.y+=dy/m*spd;if(dx)e.face=dx<0?'l':'r';}break;}
  case 'charge':e.fT++;if(e.fT>=45){e.st='fire';e.fT=0;Sfx.fire();}break;
  case 'fire':e.fT++;e.flame=Math.min(3*T,e.fT*8);if(e.fT>=45){e.st='walk';e.flame=0;e.fireCD=ri(240,480)/(1+0.08*(G.round-1));}break;
- case 'inflate':if(!G.harp||G.harp.tgt!==e){e.defT++;if(e.defT>=50){e.defT=0;e.inf--;if(e.inf<=0){e.inf=0;e.st='walk';}}}break;
+ case 'inflate':if(!G.harp||G.harp.tgt!==e){e.defT++;if(e.defT>=50){e.defT=0;e.inf--;if(e.inf<=0){e.inf=0;if(aligned(e))e.st='walk';else{e.st='emerge';e.tc=Math.round(e.x/T);e.tr=Math.round(e.y/T);}}}}break;
  case 'pop':if(e.t>=24)e.gone=true;break;}}
-function fleeMove(e,spd){if(e.y>T+0.01||e.x>0.01&&e.y>T){const tx=0,ty=T,dx=tx-e.x,dy=ty-e.y,m=Math.hypot(dx,dy);if(m<=spd){e.x=tx;e.y=ty;}else{e.x+=dx/m*spd;e.y+=dy/m*spd;}e.st=m<=spd?'walk':'ghost';e.face=dx<0?'l':'r';}
+function fleeMove(e,spd){if(e.y>T+0.01||e.x>0.01&&e.y>T){const tx=0,ty=T,dx=tx-e.x,dy=ty-e.y,m=Math.hypot(dx,dy);if(m<=spd){e.x=tx;e.y=ty;}else{e.x+=dx/m*spd;e.y+=dy/m*spd;}e.st=m<=spd?'walk':'ghost';{const cc=Math.floor((e.x+T/2)/T),rr=Math.max(0,Math.floor((e.y+T/2)/T));e.inDirt=e.st==='ghost'&&rr<ROWS&&cc>=0&&cc<COLS&&!G.dug[rr][cc];}e.face=dx<0?'l':'r';}
  else{e.st='walk';e.y=T;e.x-=spd;e.face='l';if(e.x<-T){e.gone=true;G.fx.push({x:4,y:T,txt:'ESCAPED',t:0});}}}
 function flameRect(e){const x0=e.face==='r'?e.x+T-4:e.x+4-e.flame;return[x0,e.y+8,e.flame,16];}
 
@@ -254,7 +265,7 @@ function updRock(k){const p=G.player;k.t++;
  if(k.st==='still'){const r=Math.round(k.y/T)+1;if(r<ROWS&&G.dug[r][k.c]&&!(Math.abs(p.x-k.c*T)<T&&Math.abs(p.y-r*T)<T&&p.y>k.y)){k.st='wobble';k.t=0;}}
  else if(k.st==='wobble'){if(k.t>=40){k.st='fall';k.t=0;Sfx.rock();}}
  else if(k.st==='fall'){k.y+=4;
-  for(const e of G.enemies)if(['walk','ghost','charge','fire','inflate'].includes(e.st)&&Math.abs(e.x-k.x)<T*0.7&&e.y>k.y&&e.y<k.y+T){e.st='crushed';e.flame=0;if(G.harp&&G.harp.tgt===e)G.harp=null;k.crushed.push(e);Sfx.crush();}
+  for(const e of G.enemies)if(['walk','ghost','emerge','charge','fire','inflate'].includes(e.st)&&Math.abs(e.x-k.x)<T*0.7&&e.y>k.y&&e.y<k.y+T){e.st='crushed';e.flame=0;if(G.harp&&G.harp.tgt===e)G.harp=null;k.crushed.push(e);Sfx.crush();}
   for(const e of k.crushed)e.y=k.y+T*0.55;
   if(Math.abs(p.x-k.x)<T*0.7&&p.y>k.y&&p.y<k.y+T*0.85){killPlayer('rock');}
   if(k.y%T===0){const r=k.y/T+1;if(r>=ROWS||!G.dug[r][k.c]){k.st='crumble';k.t=0;G.rocksFallen++;const n=k.crushed.length;
@@ -275,7 +286,7 @@ function update(){G.frame++;
   const alive=G.enemies.filter(e=>e.st!=='pop'&&e.st!=='crushed');if(alive.length===1&&G.enemies.length===1&&!alive[0].flee)alive[0].flee=true;
   const p=G.player;
   if(G.veg){G.veg.t++;if(G.veg.t>600)G.veg=null;else if(Math.abs(p.x-G.veg.x)<T*0.7&&Math.abs(p.y-G.veg.y)<T*0.7){addScore(G.veg.pts,G.veg.x,G.veg.y);G.veg=null;Sfx.veg();}}
-  for(const e of G.enemies){if(['walk','ghost','charge','fire'].includes(e.st)&&Math.abs(e.x-p.x)<T*0.65&&Math.abs(e.y-p.y)<T*0.65){killPlayer('enemy');break;}
+  for(const e of G.enemies){if(['walk','ghost','emerge','charge','fire'].includes(e.st)&&Math.abs(e.x-p.x)<T*0.65&&Math.abs(e.y-p.y)<T*0.65){killPlayer('enemy');break;}
    if(e.st==='fire'&&e.flame>0){const[fx,fy,fw,fh]=flameRect(e);if(p.x+6<fx+fw&&p.x+T-6>fx&&p.y+6<fy+fh&&p.y+T-6>fy){killPlayer('fire');break;}}}
   if(G.mode==='play'&&G.enemies.length===0){G.mode='clear';G.modeT=0;Sfx.clear();}
   break;}
@@ -298,7 +309,7 @@ function drawRock(k){let x=k.x,y=k.y;if(k.st==='wobble')x+=((k.t>>2)&1)?2:-2;
  ctx.fillStyle='#4a3428';ctx.beginPath();ctx.ellipse(x+16,y+18,15,13,0,0,7);ctx.fill();ctx.fillStyle='#8a6a52';ctx.beginPath();ctx.ellipse(x+15,y+16,13,11,0,0,7);ctx.fill();
  ctx.fillStyle='#b8977a';ctx.fillRect(x+8,y+9,8,4);ctx.fillRect(x+6,y+13,4,3);ctx.fillStyle='#5a4030';ctx.fillRect(x+18,y+20,6,2);ctx.fillRect(x+12,y+24,4,2);}
 function drawEnemy(e,ox,oy){const x=ox+e.x,y=oy+e.y,fr=(e.t>>4)&1,img=e.type==='p'?(fr?SPR.pk2:SPR.pk1):(fr?SPR.fy2:SPR.fy1);
- if(e.st==='ghost'){const p=G.player,a=Math.atan2(p.y-e.y,p.x-e.x);ctx.globalAlpha=0.55+0.35*Math.sin(e.t*0.3);
+ if(e.st==='ghost'&&e.inDirt){const p=G.player,a=Math.atan2(p.y-e.y,p.x-e.x);ctx.globalAlpha=0.55+0.35*Math.sin(e.t*0.3);
   for(const s of[-6,6]){ctx.fillStyle='#fff';ctx.fillRect(x+16+s-4,y+11,8,10);ctx.fillStyle=e.type==='p'?'#e83828':'#38c048';ctx.fillRect(x+16+s-2+Math.cos(a)*2,y+14+Math.sin(a)*2,4,4);}ctx.globalAlpha=1;return;}
  if(e.st==='pop'){const f=e.t/24;ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.beginPath();ctx.arc(x+16,y+16,10+f*22,0,7);ctx.stroke();ctx.fillStyle=e.type==='p'?'#e83828':'#38c048';
   for(let i=0;i<8;i++){const a=i*0.785;ctx.fillRect(x+14+Math.cos(a)*f*26,y+14+Math.sin(a)*f*26,5,5);}return;}
