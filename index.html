@@ -12,24 +12,24 @@ html,body{margin:0;height:100%;background:#07070f;overflow:hidden;touch-action:n
 canvas#game{position:fixed;left:0;top:0;image-rendering:pixelated;image-rendering:crisp-edges;display:block}
 #touch{position:fixed;inset:0;display:none;pointer-events:none}
 #touch.on{display:block}
-#dpad{position:absolute;pointer-events:auto;border-radius:50%;background:rgba(255,255,255,.08);border:3px solid rgba(255,255,255,.3);box-sizing:border-box}
-#dpad .arm{position:absolute;background:rgba(255,200,80,.35);border:2px solid rgba(255,255,255,.4);box-sizing:border-box;border-radius:6px}
-#dpad .arm.on{background:rgba(255,200,80,.8)}
-#pump{position:absolute;pointer-events:auto;border-radius:50%;background:rgba(232,56,40,.45);border:4px solid rgba(255,255,255,.5);box-sizing:border-box;display:flex;align-items:center;justify-content:center;font:bold 20px "Courier New",monospace;color:#fff;text-shadow:0 0 4px #000}
+#stickBase{position:absolute;width:84px;height:84px;margin:-42px 0 0 -42px;border-radius:50%;border:3px solid rgba(255,255,255,.35);background:rgba(255,255,255,.07);box-sizing:border-box;opacity:.55}
+#stickKnob{position:absolute;width:40px;height:40px;margin:-20px 0 0 -20px;border-radius:50%;background:rgba(255,200,80,.55);border:2px solid rgba(255,255,255,.7);box-sizing:border-box;opacity:.55}
+#stickBase.act,#stickKnob.act{opacity:.9}
+#pump{position:absolute;pointer-events:auto;border-radius:50%;background:rgba(232,56,40,.35);border:3px solid rgba(255,255,255,.45);font-size:15px!important;box-sizing:border-box;display:flex;align-items:center;justify-content:center;font:bold 20px "Courier New",monospace;color:#fff;text-shadow:0 0 4px #000}
 #pump.down{background:rgba(232,56,40,.85);transform:scale(.94)}
-#mini{position:fixed;display:flex;gap:8px;z-index:3}
-#mini div{width:48px;height:38px;opacity:.8;border-radius:8px;background:rgba(40,60,140,.6);border:2px solid rgba(255,255,255,.4);box-sizing:border-box;display:flex;align-items:center;justify-content:center;font:bold 12px "Courier New",monospace;color:#fff;cursor:pointer}
+#mini{position:fixed;display:flex;gap:6px;z-index:3}
+#mini div{width:44px;height:44px;opacity:.6;font-size:11px!important;border-radius:8px;background:rgba(40,60,140,.6);border:2px solid rgba(255,255,255,.4);box-sizing:border-box;display:flex;align-items:center;justify-content:center;font:bold 12px "Courier New",monospace;color:#fff;cursor:pointer}
 </style>
 </head>
 <body>
 <canvas id="game" width="480" height="600"></canvas>
-<div id="touch"><div id="dpad"><div class="arm" id="aU"></div><div class="arm" id="aD"></div><div class="arm" id="aL"></div><div class="arm" id="aR"></div></div><div id="pump">PUMP</div></div>
+<div id="touch"><div id="stickBase"></div><div id="stickKnob"></div><div id="pump">PUMP</div></div>
 <div id="mini"><div id="bPause">II</div><div id="bMute">♪</div><div id="bFs">[ ]</div></div>
 <script>
 /* BURROW BUSTER — an original dig-and-pump arcade game. Single file, no assets. */
 'use strict';
 const cv=document.getElementById('game'),ctx=cv.getContext('2d');
-const T=32,COLS=14,ROWS=17,HUDH=40,FW=COLS*T,FH=HUDH+ROWS*T;
+const T=32,HUDH=40;let COLS=14,ROWS=17,FW=COLS*T,FH=HUDH+ROWS*T;
 let VW=FW,VH=FH,FX=0,FY=0,K=1,S=1,HX=0,HY=0,HW=FW,HH=HUDH,HUDSIDE=false;
 let seed=Date.now()>>>0; function rand(){seed=(seed+0x6D2B79F5)>>>0;let t=seed;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296;}
 const rnd=(a,b)=>a+rand()*(b-a),ri=(a,b)=>Math.floor(rnd(a,b+1));
@@ -78,16 +78,19 @@ addEventListener('keydown',e=>{const d=KEYD[e.code];if(d){if(!In.keys.includes(d
 addEventListener('keyup',e=>{const d=KEYD[e.code];if(d)In.keys=In.keys.filter(k=>k!==d);if(e.code==='Space'||e.code==='KeyZ')In.pump=false;});
 addEventListener('blur',()=>{In.keys=[];In.pump=false;In.tdir=null;if(G.mode==='play')G.mode='pause';});
 function wantDir(){return In.tdir||(In.keys.length?In.keys[In.keys.length-1]:null);}
-const touchEl=document.getElementById('touch'),dpad=document.getElementById('dpad'),pumpEl=document.getElementById('pump');
+const touchEl=document.getElementById('touch'),pumpEl=document.getElementById('pump');
 function enableTouch(){if(!document.body.classList.contains('touch')){document.body.classList.add('touch');touchEl.classList.add('on');resize();}}
-let dpadId=null;
-function dpadSet(t){const r=dpad.getBoundingClientRect(),dx=t.clientX-(r.left+r.width/2),dy=t.clientY-(r.top+r.height/2);
- In.tdir=Math.hypot(dx,dy)<r.width*0.12?null:(Math.abs(dx)>Math.abs(dy)?(dx>0?'r':'l'):(dy>0?'d':'u'));
- for(const k of 'UDLR')document.getElementById('a'+k).classList.toggle('on',In.tdir===k.toLowerCase());}
-dpad.addEventListener('touchstart',e=>{e.preventDefault();e.stopPropagation();const t=e.changedTouches[0];dpadId=t.identifier;dpadSet(t);if(G.mode!=='play'&&G.mode!=='pause')In.startP=true;},{passive:false});
-dpad.addEventListener('touchmove',e=>{e.preventDefault();for(const t of e.changedTouches)if(t.identifier===dpadId)dpadSet(t);},{passive:false});
-const dEnd=e=>{for(const t of e.changedTouches)if(t.identifier===dpadId){dpadId=null;In.tdir=null;for(const k of 'UDLR')document.getElementById('a'+k).classList.remove('on');}};
-dpad.addEventListener('touchend',dEnd);dpad.addEventListener('touchcancel',dEnd);
+const Stick={id:null,ox:0,oy:0,R:34,DZ:8,base:document.getElementById('stickBase'),knob:document.getElementById('stickKnob'),rx:0,ry:0};
+function stickShow(x,y,kx,ky,act){Stick.base.style.left=x+'px';Stick.base.style.top=y+'px';Stick.knob.style.left=kx+'px';Stick.knob.style.top=ky+'px';Stick.base.classList.toggle('act',act);Stick.knob.classList.toggle('act',act);}
+function stickDir(dx,dy){const m=Math.hypot(dx,dy);if(m<Stick.DZ)return null;const ax=Math.abs(dx),ay=Math.abs(dy),cur=In.tdir,H=1.3;
+ let horiz=ax>ay;if(cur==='l'||cur==='r'){if(ay<ax*H)horiz=true;}else if(cur==='u'||cur==='d'){if(ax<ay*H)horiz=false;}
+ return horiz?(dx>0?'r':'l'):(dy>0?'d':'u');}
+function stickMove(t){let dx=t.clientX-Stick.ox,dy=t.clientY-Stick.oy;In.tdir=stickDir(dx,dy);const m=Math.hypot(dx,dy);if(m>Stick.R){dx*=Stick.R/m;dy*=Stick.R/m;}stickShow(Stick.ox,Stick.oy,Stick.ox+dx,Stick.oy+dy,true);}
+function stickRest(){stickShow(Stick.rx,Stick.ry,Stick.rx,Stick.ry,false);}
+document.addEventListener('touchstart',e=>{for(const t of e.changedTouches){if(Stick.id===null&&t.clientX<innerWidth*0.5&&(G.mode==='play'||G.mode==='ready'||G.mode==='pause')){Stick.id=t.identifier;Stick.ox=t.clientX;Stick.oy=t.clientY;stickMove(t);}}},{passive:true});
+document.addEventListener('touchmove',e=>{for(const t of e.changedTouches)if(t.identifier===Stick.id)stickMove(t);},{passive:true});
+const sEnd=e=>{for(const t of e.changedTouches)if(t.identifier===Stick.id){Stick.id=null;In.tdir=null;stickRest();}};
+document.addEventListener('touchend',sEnd);document.addEventListener('touchcancel',sEnd);
 pumpEl.addEventListener('touchstart',e=>{e.preventDefault();e.stopPropagation();pumpEl.classList.add('down');In.pump=true;In.pumpP=true;In.startP=true;},{passive:false});
 const pEnd=e=>{e.preventDefault();pumpEl.classList.remove('down');In.pump=false;};
 pumpEl.addEventListener('touchend',pEnd,{passive:false});pumpEl.addEventListener('touchcancel',pEnd,{passive:false});
@@ -105,22 +108,21 @@ document.addEventListener('fullscreenchange',resize);
 /* ---------- LAYOUT: adaptive full-window view, field never covered by controls ---------- */
 function place(el,x,y,w,h){el.style.left=x+'px';el.style.top=y+'px';if(w!=null){el.style.width=w+'px';el.style.height=h+'px';}}
 function resize(){
- const vw=innerWidth,vh=innerHeight,touch=document.body.classList.contains('touch'),port=vh>vw*1.05,GH=ROWS*T;
- const CD=touch?Math.min(124,Math.max(96,vw*0.3)):0,CP=touch?Math.round(CD*0.72):0,MG=8;
- let s;HUDSIDE=false;
- if(!port){s=vh/GH;const side=(vw-FW*s)/2;
-  if(side/s>=128&&(!touch||side>=CD+2*MG))HUDSIDE=true;else s=Math.min(vh/FH,vw/FW);}
- else s=Math.min(vw/FW,(vh-(touch?CD+2*MG:0))/FH);
+ const vw=innerWidth,vh=innerHeight,touch=document.body.classList.contains('touch'),port=vh>vw*1.05;
+ if(typeof G!=='undefined'&&G.mode==='title'&&!G.fixedGrid){const[c,r]=wantGrid();if(c!==COLS||r!==ROWS){setGrid(c,r);paintDirt();}}
+ const GH=ROWS*T,MG=8;let s;HUDSIDE=false;
+ if(!port){s=Math.min(vh/GH,vw/(FW+272));if((vw/s-FW)/2>=130)HUDSIDE=true;else s=Math.min(vh/FH,vw/FW);}
+ else s=Math.min(vw/FW,vh/FH);
  s=Math.max(s,0.25);S=s;VW=vw/s;VH=vh/s;
- if(HUDSIDE){FX=(VW-FW)/2;FY=0;HX=FX-132;HY=0;HW=124;HH=170;}
+ if(HUDSIDE){FX=(VW-FW)/2;FY=(VH-GH)/2;HX=FX-132;HY=FY;HW=124;HH=170;}
  else{FX=(VW-FW)/2;FY=port?HUDH:(VH-FH)/2+HUDH;HX=FX;HY=FY-HUDH;HW=FW;HH=HUDH;}
  const dpr=Math.min(devicePixelRatio||1,2),bw=Math.min(Math.round(vw*dpr),2400);K=bw/VW;
  cv.width=bw;cv.height=Math.round(VH*K);cv.style.width=vw+'px';cv.style.height=vh+'px';
- const fx=FX*s,fw=FW*s,mini=document.getElementById('mini'),bot=vh-MG;
- place(dpad,MG,bot-CD,CD,CD);place(pumpEl,vw-MG-CP,bot-CP-(CD-CP)/2,CP,CP);
- if(!touch)place(mini,HUDSIDE?fx+fw+(vw-fx-fw)/2-80:vw/2-80,vh-46);else if(port)place(mini,vw/2-80,bot-CD-46);else place(mini,fx+fw+(vw-fx-fw)/2-80,bot-CD-46);
- const a=CD*0.32;place(document.getElementById('aU'),CD/2-a/2-3,5,a,a);place(document.getElementById('aD'),CD/2-a/2-3,CD-a-11,a,a);
- place(document.getElementById('aL'),5,CD/2-a/2-3,a,a);place(document.getElementById('aR'),CD-a-11,CD/2-a/2-3,a,a);
+ const fx=FX*s,fw=FW*s,mini=document.getElementById('mini'),P=64,rm=vw-fx-fw;
+ if(!port&&HUDSIDE){Stick.rx=Math.max(54,fx/2);Stick.ry=vh-60;place(pumpEl,fx+fw+rm/2-P/2,vh-MG-P-8,P,P);place(mini,Math.min(vw-146,fx+fw+rm/2-73),vh-MG-P-8-54);}
+ else{Stick.rx=60;Stick.ry=vh-62;place(pumpEl,vw-MG-P-6,vh-MG-P-6,P,P);place(mini,vw/2-73,vh-MG-44);}
+ if(!touch)place(mini,HUDSIDE?Math.min(vw-146,fx+fw+rm/2-73):vw-150,HUDSIDE?vh-52:Math.max(4,HY*s-50));
+ if(Stick.id===null)stickRest();
 }
 addEventListener('resize',resize);addEventListener('orientationchange',()=>setTimeout(resize,200));if(window.visualViewport)visualViewport.addEventListener('resize',resize);
 
@@ -139,11 +141,14 @@ const SPR={
 // dirt layer (tunnels are carved out of it)
 const dirtCv=document.createElement('canvas');dirtCv.width=FW;dirtCv.height=ROWS*T;const dctx=dirtCv.getContext('2d');
 const STRATA=[['#f0b838','#c88a20','#ffd870'],['#d88020','#a85a10','#f0a050'],['#b84c20','#7e2c10','#d8703a'],['#7c2c14','#4c1608','#a04a2a']];
-function layerOf(r){return r<6?0:r<10?1:r<13?2:3;}
+function layerOf(r){return Math.max(0,Math.min(3,Math.floor((r-2)*4/(ROWS-2))));}
+function setGrid(c,r){if(c===COLS&&r===ROWS)return;COLS=c;ROWS=r;FW=c*T;FH=HUDH+r*T;dirtCv.width=FW;dirtCv.height=r*T;}
+function wantGrid(){const vw=innerWidth,vh=innerHeight;if(vh>vw*1.05){const s=vw/(14*T);return[14,Math.max(17,Math.min(30,Math.floor((vh/s-HUDH)/T)))];}
+ const s=vh/(17*T);return[Math.max(14,Math.min(24,Math.floor((vw/s-272)/T))),17];}
 function paintDirt(){dctx.clearRect(0,0,FW,ROWS*T);let s=1234;const pr=()=>((s=(s*1103515245+12345)&0x7fffffff)/0x7fffffff);
  for(let r=2;r<ROWS;r++){const c=STRATA[layerOf(r)];dctx.fillStyle=c[0];dctx.fillRect(0,r*T,FW,T);
   for(let i=0;i<70;i++){dctx.fillStyle=pr()<0.6?c[1]:c[2];const x=Math.floor(pr()*FW/2)*2,y=r*T+Math.floor(pr()*T/2)*2;dctx.fillRect(x,y,2,2);}}
- for(const b of [6,10,13]){dctx.fillStyle=STRATA[layerOf(b)][1];for(let x=0;x<FW;x+=4)dctx.fillRect(x,b*T+((x>>2)%3===0?-2:0),4,2);}}
+ for(let b=3;b<ROWS;b++)if(layerOf(b)!==layerOf(b-1)){dctx.fillStyle=STRATA[layerOf(b)][1];for(let x=0;x<FW;x+=4)dctx.fillRect(x,b*T+((x>>2)%3===0?-2:0),4,2);}}
 
 /* ---------- GAME STATE ---------- */
 const G={mode:'title',modeT:0,score:0,lives:3,round:1,nextExtra:10000,frame:0,enemies:[],rocks:[],fx:[],veg:null,harp:null,god:false,player:null,dug:[],hE:[],vE:[],rocksFallen:0,vegDone:false,espd:1};
@@ -164,16 +169,16 @@ function baseLevel(){G.dug=grid();G.hE=grid();G.vE=grid();paintDirt();G.rocks=[]
 function mkEnemy(type,c,r,dir){return{type,x:c*T,y:r*T,sx:c*T,sy:r*T,dir:dir||'r',face:'r',st:'walk',inf:0,defT:0,ghostCD:ghostCD(),gT:0,fireCD:ri(200,400),fT:0,flame:0,flee:false,t:0,gone:false};}
 function ghostCD(){return ri(420,840)/(1+0.12*(G.round-1));}
 function mkRock(c,r){return{c,x:c*T,y:r*T,st:'still',t:0,crushed:[],gone:false};}
-function newLevel(){baseLevel();
- for(let r=2;r<=8;r++)openEdge(6,r-1,'d');
- G.player={x:6*T,y:8*T,sx:6*T,sy:8*T,dir:'r',moving:false,digging:false,anim:0};
- const n=Math.min(3+G.round,9),nf=Math.min(1+Math.floor(G.round/2),n-1);
+function newLevel(){if(!G.fixedGrid)setGrid(...wantGrid());baseLevel();const PC=Math.floor(COLS/2)-1,PR=Math.floor(ROWS/2);G.pc=PC;G.pr=PR;
+ for(let r=2;r<=PR;r++)openEdge(PC,r-1,'d');
+ G.player={x:PC*T,y:PR*T,sx:PC*T,sy:PR*T,dir:'r',moving:false,digging:false,anim:0};
+ const AR=COLS*ROWS/238,n=Math.min(3+G.round,9)+Math.max(0,Math.round((AR-1)*2.5)),nf=Math.min(1+Math.floor(G.round/2),n-1);
  const used=(c,r)=>c<0||c>=COLS||r<3||r>=ROWS||G.dug[r][c]||G.dug[r-1][c]||(r+1<ROWS&&G.dug[r+1][c]);
  for(let i=0;i<n;i++){for(let tries=0;tries<200;tries++){const hz=rand()<0.6,len=ri(3,4),c=ri(0,hz?COLS-len:COLS-1),r=ri(3,hz?ROWS-1:ROWS-len);
    const cells=[];for(let k=0;k<len;k++)cells.push(hz?[c+k,r]:[c,r+k]);
-   if(cells.some(([a,b])=>used(a,b)||(Math.abs(a-6)+Math.abs(b-8))<5))continue;
+   if(cells.some(([a,b])=>used(a,b)||(Math.abs(a-PC)+Math.abs(b-PR))<5))continue;
    for(let k=0;k<len-1;k++)openEdge(cells[k][0],cells[k][1],hz?'r':'d');const m=cells[1];G.enemies.push(mkEnemy(i<nf?'f':'p',m[0],m[1],hz?'r':'d'));break;}}
- const nr=3+Math.min(2,Math.floor((G.round-1)/3));
+ const nr=Math.round((3+Math.min(2,Math.floor((G.round-1)/3)))*Math.sqrt(AR));
  for(let i=0;i<nr;i++)for(let tries=0;tries<200;tries++){const c=ri(0,COLS-1),r=ri(3,ROWS-3);
    if(G.dug[r][c]||G.dug[r+1][c]||G.dug[r-1][c]||G.rocks.some(k=>Math.abs(k.c-c)<2&&Math.abs(k.y/T-r)<2))continue;G.rocks.push(mkRock(c,r));break;}
 }
@@ -192,8 +197,9 @@ function afterDeath(){G.lives--;if(G.lives<=0){G.mode='over';G.modeT=0;if(G.scor
 function updPlayer(pp){const p=G.player;p.moving=false;const w=wantDir();
  if(G.harp){updHarp(pp,w);return;}
  if(pp){G.harp={len:0,dir:p.dir,st:'out',tgt:null,t:0};Sfx.shoot();return;}
- if(!w)return;let d=w;const wH=d==='l'||d==='r';
- if(p.x%T!==0&&!wH)d=p.dir;else if(p.y%T!==0&&wH)d=p.dir;
+ if(p.bufT>0)p.bufT--;let w2=w;if(!w2&&p.bufT>0){if(aligned(p)){w2=p.buf;p.bufT=0;}else w2=p.dir;}
+ if(!w2)return;let d=w2;const wH=d==='l'||d==='r';
+ if(p.x%T!==0&&!wH){d=p.dir;p.buf=w2;p.bufT=24;}else if(p.y%T!==0&&wH){d=p.dir;p.buf=w2;p.bufT=24;}
  const[dx,dy]=DIRS[d];
  if(aligned(p)){const c=p.x/T+dx,r=p.y/T+dy;p.dir=d;if(c<0||c>=COLS||r<1||r>=ROWS||rockAt(c,r))return;}
  p.dir=d;stepToward(p,d,p.digging?1.35:1.75);p.moving=true;p.anim++;
@@ -253,7 +259,7 @@ function updRock(k){const p=G.player;k.t++;
   if(Math.abs(p.x-k.x)<T*0.7&&p.y>k.y&&p.y<k.y+T*0.85){killPlayer('rock');}
   if(k.y%T===0){const r=k.y/T+1;if(r>=ROWS||!G.dug[r][k.c]){k.st='crumble';k.t=0;G.rocksFallen++;const n=k.crushed.length;
     if(n){addScore(CRUSH[Math.min(n,8)],k.x,k.y);for(const e of k.crushed)e.gone=true;}
-    if(G.rocksFallen>=2&&!G.vegDone){G.vegDone=true;G.veg={x:6*T,y:8*T,t:0,pts:[400,600,800,1000,2000,3000,4000,5000,6000,7000,8000][Math.min(G.round-1,10)]};Sfx.veg();}}}}
+    if(G.rocksFallen>=2&&!G.vegDone){G.vegDone=true;G.veg={x:(G.pc??6)*T,y:(G.pr??8)*T,t:0,pts:[400,600,800,1000,2000,3000,4000,5000,6000,7000,8000][Math.min(G.round-1,10)]};Sfx.veg();}}}}
  else if(k.st==='crumble'){if(k.t>=36)k.gone=true;}}
 
 /* ---------- LOOP ---------- */
@@ -336,11 +342,11 @@ function render(){ctx.setTransform(1,0,0,1,0,0);ctx.fillStyle='#07070f';ctx.fill
  if(G.mode==='pause'){ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(ox,oy,FW,ROWS*T);txt('PAUSED',cx,cy,30,'#fff');}
  if(G.mode==='clear'){txt('ROUND CLEAR!',cx,cy-10,28,'#7fff7f');}
  if(G.mode==='over'){ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(ox,oy,FW,ROWS*T);txt('GAME OVER',cx,cy-20,36,'#ff5050');txt('SCORE '+G.score,cx,cy+20,18,'#fff');if(G.modeT>60&&(G.frame>>5)&1)txt('TAP / SPACE',cx,cy+54,14,'#ccc');}}
-paintDirt();
-const BB={manual:false,G,In,step(n){for(let i=0;i<(n||1);i++)update();},render,start:startGame,newLevel,mkEnemy,mkRock,openEdge,
- setup(o){G.round=o.round||1;baseLevel();const p=o.player||[6,8];G.player={x:p[0]*T,y:p[1]*T,sx:p[0]*T,sy:p[1]*T,dir:'r',moving:false,digging:false,anim:0};digTile(p[0],p[1]);
+setGrid(...wantGrid());paintDirt();
+const BB={manual:false,G,In,step(n){for(let i=0;i<(n||1);i++)update();},render,start:startGame,layerOf,newLevel,mkEnemy,mkRock,openEdge,
+ setup(o){G.round=o.round||1;setGrid(o.cols||14,o.rows||17);G.pc=6;G.pr=8;baseLevel();const p=o.player||[6,8];G.player={x:p[0]*T,y:p[1]*T,sx:p[0]*T,sy:p[1]*T,dir:'r',moving:false,digging:false,anim:0};digTile(p[0],p[1]);
   for(const[c,r,d]of o.tunnels||[])openEdge(c,r,d);for(const[t,c,r,d]of o.enemies||[])G.enemies.push(mkEnemy(t,c,r,d));for(const[c,r]of o.rocks||[])G.rocks.push(mkRock(c,r));G.score=0;G.mode="play";G.modeT=0;},
- layout(){return{S,FX,FY,FW,FH,VW,VH,K,GH:ROWS*T,HX,HY,HW,HH,HUDSIDE};},Audio,Music,Sfx};
+ layout(){return{COLS,ROWS,S,FX,FY,FW,FH,VW,VH,K,GH:ROWS*T,HX,HY,HW,HH,HUDSIDE};},Audio,Music,Sfx};
 window.BB=BB;
 if('ontouchstart' in window||navigator.maxTouchPoints>0)enableTouch();
 let acc=0,last=0;function frame(t){requestAnimationFrame(frame);if(BB.manual){last=t;return;}const dt=Math.min(100,t-(last||t));last=t;acc+=dt;let n=0;while(acc>=1000/60&&n<5){update();acc-=1000/60;n++;}render();}
